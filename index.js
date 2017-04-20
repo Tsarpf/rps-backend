@@ -64,6 +64,8 @@ function checkForWaiting(socket) {
   if (waitingUser) {
     waitingUser.removeAllListeners()
     newGame([waitingUser, socket])
+    waitingUser.emit('state', 'opponent change')
+    socket.emit('state', 'opponent change')
     waitingUser = null
   } else {
     waitingUser = socket
