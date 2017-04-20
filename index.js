@@ -31,7 +31,10 @@ const RPSWinTable = [
 ]
 
 function finishRound(moves, players) {
-  switch (RPSWinTable[moves[players[0].id]]) {
+  const player1Move = moves[players[0].id]
+  const player2Move = moves[players[1].id]
+  const result = RPSWinTable[player1Move][player2Move]
+  switch (result) {
   case true:
     players[0].emit('game', 'You win!')
     players[1].emit('game', 'You lose!')
@@ -53,48 +56,56 @@ function finishRound(moves, players) {
 let waitingUser = null
 
 function checkForWaiting(socket) {
+  const dcHandler = () => {
+    waitingUser.removeAllListeners()
+    waitingUser = null
+  }
   if (waitingUser) {
+    waitingUser.removeAllListeners()
     newGame([waitingUser, socket])
     waitingUser = null
   } else {
     waitingUser = socket
+    waitingUser.emit('state', 'waiting')
+    waitingUser.on('disconnect', dcHandler)
   }
 }
 
 function roundFinished(moves) {
   const keys = Object.keys(moves)
-  return keys.filter(key => !moves[key]).length === 0
+  return keys.filter(key => moves[key] === null).length === 0
 }
 
 function newGame(players) {
   const moves = {}
   players.forEach(player => {
+    player.emit('state', 'new game')
     moves[player.id] = null
     const listeners = {}
     listeners.move = (move) => {
-      if (!moves[player]) {
-        moves[player] = move
+      if (moves[player.id] === null) {
+        moves[player.id] = move
         if (roundFinished(moves)) {
           finishRound(moves, players)
-          player.removeListener('move', listeners['move'])
-          player.removeListener('chat', listeners['chat'])
+          player.removeAllListeners()
           newGame(players)
         }
       } else {
-        //fuk the client for spamming
+        player.emit('info', 'stop spamming')
       }
     }
     listeners.chat = (msg) => {
       broadcastToOthers(player.id, players, 'chat', msg)
     }
-    player.on('move', listeners['move'])
-    player.on('chat', listeners['chat'])
-    player.on('disconnect', () => {
+    listeners.disconnect = () => {
       players.filter(p => p.id !== player.id).forEach(nonDCPlayer => {
-        nonDCPlayer.removeListener('move', listeners['move'])
-        nonDCPlayer.removeListener('chat', listeners['chat'])
+        nonDCPlayer.emit('info', 'opponent disconnected')
+        nonDCPlayer.removeAllListeners()
         checkForWaiting(nonDCPlayer)
       })
-    })
+    }
+    player.on('move', listeners['move'])
+    player.on('chat', listeners['chat'])
+    player.on('disconnect', listeners['disconnect'])
   })
 }
