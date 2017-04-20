@@ -51,6 +51,7 @@ function finishRound(moves, players) {
     players[0].emit('game', 'Game blew up!')
     players[1].emit('game', 'Game blew up!')
   }
+  return result
 }
 
 let waitingUser = null
@@ -76,8 +77,11 @@ function roundFinished(moves) {
   return keys.filter(key => moves[key] === null).length === 0
 }
 
-function newGame(players) {
+function newGame(players, score) {
   const moves = {}
+  score = score || [0, 0]
+  players[0].emit('score', score)
+  players[1].emit('score', [score[1], score[0]])
   players.forEach(player => {
     player.emit('state', 'new game')
     moves[player.id] = null
@@ -86,9 +90,11 @@ function newGame(players) {
       if (moves[player.id] === null) {
         moves[player.id] = move
         if (roundFinished(moves)) {
-          finishRound(moves, players)
-          player.removeAllListeners()
-          newGame(players)
+          const firstPlayerWon = finishRound(moves, players)
+          if (firstPlayerWon) score[0]++
+          else if (firstPlayerWon === false) score[1]++
+          players.forEach(p => p.removeAllListeners())
+          newGame(players, score)
         }
       } else {
         player.emit('info', 'stop spamming')
@@ -99,7 +105,7 @@ function newGame(players) {
     }
     listeners.disconnect = () => {
       players.filter(p => p.id !== player.id).forEach(nonDCPlayer => {
-        nonDCPlayer.emit('info', 'opponent disconnected')
+        nonDCPlayer.emit('state', 'opponent disconnect')
         nonDCPlayer.removeAllListeners()
         checkForWaiting(nonDCPlayer)
       })
