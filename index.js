@@ -9,6 +9,8 @@ app.get('/', (req, res) => {
 
 io.on('connection', checkForWaiting)
 
+io.on('connection', () => io.emit('usercount', io.engine.clientsCount))
+
 http.listen(port, () => {
   console.log('listening on *:' + port)
 })
